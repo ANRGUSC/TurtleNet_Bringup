@@ -216,7 +216,7 @@ class Pozyx():
 
         while not rospy.is_shutdown():
             self.set_pozyx_position()
-            rospy.sleep(1) # to do: choose rate
+            rospy.sleep(0.1) # to do: choose rate
 
     def odom_callback(self, odometry):
         self.mypose.pose.orientation = odometry.pose.pose.orientation
