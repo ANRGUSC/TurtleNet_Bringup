@@ -12,15 +12,16 @@
 
   <arg name="sim" default="false"/>
 
-  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_core.launch">
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_core.launch" ns="$(arg multi_robot_name)">
     <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
   </include>
-  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_lidar.launch">
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_lidar.launch" ns="$(arg multi_robot_name)">
     <arg name="set_frame_id" value="$(arg set_lidar_frame_id)"/>
     <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
   </include>
-  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_pozyx.launch">
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_pozyx.launch" ns="$(arg multi_robot_name)">
       <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
+      <arg name="sim" default="$(arg sim)"/>
       <arg name="anchor0" value="$(arg anchor0)"/>
       <arg name="anchor1" value="$(arg anchor1)"/>
       <arg name="anchor2" value="$(arg anchor2)"/>
