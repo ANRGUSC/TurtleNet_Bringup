@@ -1,0 +1,11 @@
+<launch>
+  <arg name="set_frame_id" default="base_scan"/>
+  <arg name="multi_robot_name" default=""/>
+
+  <!-- <group ns = "$(arg multi_robot_name)"> -->
+      <node pkg="hls_lfcd_lds_driver" type="hlds_laser_publisher" name="turtlebot3_lds" output="screen">
+        <param name="port" value="/dev/ttyUSB0"/>
+        <param name="frame_id" value="$(arg set_frame_id)"/>
+      </node>
+  <!-- </group> -->
+</launch>
