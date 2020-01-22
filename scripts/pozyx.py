@@ -204,7 +204,7 @@ class Pozyx():
         self.initialpose.pose.position.x, self.initialpose.pose.position.y, self.initialpose.pose.position.z = float(sys.argv[2]), float(sys.argv[3]), 0
         q = quaternion_from_euler(0, 0, float(sys.argv[4]))
         self.initialpose.pose.orientation.x, self.initialpose.pose.orientation.y, self.initialpose.pose.orientation.z, self.initialpose.pose.orientation.w = q[0], q[1], q[2], q[3]
-
+        rospy.loginfo("pozyx: setting initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
         self.mypose = self.initialpose
 
         # for real pozyx
@@ -289,7 +289,7 @@ class Pozyx():
                 rospy.loginfo("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
                                                        pozyxpose.pose.position.y - self.truepose.pose.position.y);
         else:
-            rospy.loginfo("waiting for pozyx, publishing initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+            rospy.logdebug("waiting for pozyx, publishing initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
             self.pub.publish(self.initialpose)
 
     def truestate_callback(self, states):
