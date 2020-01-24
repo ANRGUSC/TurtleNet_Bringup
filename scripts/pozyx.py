@@ -46,22 +46,12 @@ def get_angle(d1, d2, sep):
         return math.asin(ratio)
 
 def triangulate(node_data, a_nodelist):
-    rospy.sleep(random.random())
-    # print(node_data, a_nodelist)
-    anchor_coor = [None]*10
-    anchor_id = [None]*10
-    num_nodes = 0
+    anchor_coor = list(a_nodelist.values())
+    anchor_id = list(a_nodelist.keys())
+    num_nodes = len(a_nodelist)
     estimates = []
 
-    for node_id in sorted(node_data.keys()):
-        if str(node_id) in a_nodelist.keys():
-            # print("added")
-            anchor_id[num_nodes] = node_id
-            anchor_coor[num_nodes] = a_nodelist[str(node_id)]
-        num_nodes = num_nodes + 1
-
     permutelist = list(it.permutations(range(num_nodes), r=3))
-    # print(permutelist)
     i = 0
     for item in permutelist:
         i=i+1
@@ -77,9 +67,6 @@ def triangulate(node_data, a_nodelist):
         d1 = node_data[anchor_id[item[0]]]
         d2 = node_data[anchor_id[item[1]]]
         d3 = node_data[anchor_id[item[2]]]
-        # d1 = node_data[anchor_id[item[0]]]
-        # d2 = node_data[anchor_id[item[1]]]
-        # d3 = node_data[anchor_id[item[2]]]
 
         ab_vec = np.subtract(a,b)
         # print(ab_vec)
@@ -90,10 +77,9 @@ def triangulate(node_data, a_nodelist):
         # print('d3: ' + str(d3))
         # print('ab_mag: ' + str(ab_mag))
 
-        # Lilly
-        # if((d1 + d2) < ab_mag):
-            # continue
-
+        if((d1 + d2) < ab_mag):
+            # triangle inequality failed
+            continue
 
         ab_mid = np.add(np.divide(ab_vec, 2), b)
 
@@ -104,7 +90,6 @@ def triangulate(node_data, a_nodelist):
             ab_ang = math.atan2(ab_vec[1],ab_vec[0])
         else:
             ab_ang = math.atan(ab_vec[1]/ab_vec[0])
-        # print(ab_vec[1], ab_vec[0], ab_vec[1]/ab_vec[0], math.atan(ab_vec[1]/ab_vec[0]), math.atan2(ab_vec[1],ab_vec[0]))
 
         if ab_vec[0] < 0 and ab_vec[1] < 0:
             ab_ang += math.pi
@@ -126,28 +111,17 @@ def triangulate(node_data, a_nodelist):
         node_vec1 = np.add(node_vec1, ab_mid)
         node_vec2 = np.add(node_vec2, ab_mid)
 
-        # print(str(i)+"***********************")
-        # print("AB_ang: "+str(math.degrees(ab_ang)))
-        # print("node_ang: " +str(math.degrees(node_ang)))
-        # # print(math.degrees(node_ang))
-        # print(math.degrees(node_ang1))
-        # print(math.degrees(node_ang2))
-        # print("AB_mid: "+str(ab_mid))
-        # print("C: "+str(c))
-        # print(node_vec1)
-        # print(node_vec2)
-
-
         node_dist1 = abs(np.linalg.norm(np.subtract(c, node_vec1)) - d3)
         node_dist2 = abs(np.linalg.norm(np.subtract(c, node_vec2)) - d3)
 
-        if(node_dist1 < node_dist2):
+        if(node_dist1 <= node_dist2):
             estimates.append(node_vec1)
         else:
             estimates.append(node_vec2)
 
         # print("***********************")
-
+    if len(estimates) == 0:
+        return None
     retval = np.mean(estimates, axis=0).tolist()
     return (round(retval[0], 4), round(retval[1], 4))
 
@@ -163,13 +137,21 @@ def noise(r):
     else:
         return r + random.random() - 0.25
 
+def reverse_noise(r):
+    if r < 2:
+        return r - 0.15
+    if r < 6:
+        return r
+    else:
+        return t - 0.25
+
 class Pozyx():
 
     def __init__(self,sim,p):
         rospy.init_node('pozyx')
         self.sim = sim
         self.p = p
-        self.noise = False
+        self.noise = True
 
         try:
             rospy.get_param('anchor0')
@@ -219,15 +201,22 @@ class Pozyx():
             rospy.sleep(0.1) # to do: choose rate
 
     def odom_callback(self, odometry):
+        # rospy.loginfo("odom callback")
         self.mypose.pose.orientation = odometry.pose.pose.orientation
 
     def anchor0_callback(self, pose_stamped):
+        # rospy.loginfo("anchor0 callback")
+        # print(pose_stamped.pose.position.x, pose_stamped.pose.position.y)
         self.anchor0 = pose_stamped.pose
 
     def anchor1_callback(self, pose_stamped):
+        # rospy.loginfo("anchor1 callback")
+        # print(pose_stamped.pose.position.x, pose_stamped.pose.position.y)
         self.anchor1 = pose_stamped.pose
 
     def anchor2_callback(self, pose_stamped):
+        # rospy.loginfo("anchor2 callback")
+        # print(pose_stamped.pose.position.x, pose_stamped.pose.position.y)
         self.anchor2 = pose_stamped.pose
 
     def set_pozyx_position(self):
@@ -237,17 +226,20 @@ class Pozyx():
                     rospy.get_param('anchor1'):(self.anchor1.position.x,self.anchor1.position.y),
                     rospy.get_param('anchor2'):(self.anchor2.position.x,self.anchor2.position.y)}
 
-            if self.sim:
+            if self.sim and self.truepose:
                 # ranges (simulated)
                 if self.noise: # switch this back to truepose for gazebo
-                    r0 = noise(pose_dist(self.mypose.pose,self.anchor0))
-                    r1 = noise(pose_dist(self.mypose.pose,self.anchor1))
-                    r2 = noise(pose_dist(self.mypose.pose,self.anchor2))
+                    r0 = noise(pose_dist(self.truepose.pose,self.anchor0))
+                    r1 = noise(pose_dist(self.truepose.pose,self.anchor1))
+                    r2 = noise(pose_dist(self.truepose.pose,self.anchor2))
+                    dists = {rospy.get_param('anchor0'):reverse_noise(r0), rospy.get_param('anchor1'):reverse_noise(r1), rospy.get_param('anchor2'):reverse_noise(r2)}
                 else:
-                    r0 = pose_dist(self.mypose.pose,self.anchor0)
-                    r1 = pose_dist(self.mypose.pose,self.anchor1)
-                    r2 = pose_dist(self.mypose.pose,self.anchor2)
-                dists = {rospy.get_param('anchor0'):r0, rospy.get_param('anchor1'):r1, rospy.get_param('anchor2'):r2}
+                    r0 = pose_dist(self.truepose.pose,self.anchor0)
+                    r1 = pose_dist(self.truepose.pose,self.anchor1)
+                    r2 = pose_dist(self.truepose.pose,self.anchor2)
+                    dists = {rospy.get_param('anchor0'):r0, rospy.get_param('anchor1'):r1, rospy.get_param('anchor2'):r2}
+            elif self.sim and self.truepose is None:
+                return
 
             else:
                 # ranges (real pozyx)
@@ -263,6 +255,8 @@ class Pozyx():
                             "tb3_0":self.dist_averages[0x685e]/self.n,
                             "tb3_1":self.dist_averages[0x6816]/self.n}
 
+                    # decide whether to reverse noise here
+
                     dists = {rospy.get_param('anchor0'):all_dists[rospy.get_param('anchor0')],
                             rospy.get_param('anchor1'):all_dists[rospy.get_param('anchor1')],
                             rospy.get_param('anchor2'):all_dists[rospy.get_param('anchor2')]}
@@ -272,21 +266,20 @@ class Pozyx():
             pozyxpose = PoseStamped()
             pozyxpose.header.stamp = rospy.Time.now()
             pozyxpose.header.frame_id = rospy.get_namespace()+"base_scan"
-            pozyxpose.pose.position.x, pozyxpose.pose.position.y = triangulate(dists,coords)
+            if triangulate(dists,coords) is not None:
+                pozyxpose.pose.position.x, pozyxpose.pose.position.y = triangulate(dists,coords)
             if self.truepose: # simulated
                 pozyxpose.pose.position.z = self.truepose.pose.position.z
-                pozyxpose.pose.orientation = self.mypose.pose.orientation
-            else: # real (to do)
+                pozyxpose.pose.orientation = self.truepose.pose.orientation # figure out yaw
+            else: # real or initialization (to do)
                 pozyxpose.pose.position.z = 0
-                pozyxpose.pose.orientation = self.mypose.pose.orientation
-            rospy.loginfo("estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
-            rospy.loginfo("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.initialpose.pose.position.x,
-                                                   pozyxpose.pose.position.y - self.initialpose.pose.position.y);
+                pozyxpose.pose.orientation = self.mypose.pose.orientation # figure out yaw from odom
+            rospy.logdebug("estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
             self.pub.publish(pozyxpose)
             self.mypose = pozyxpose
 
             if self.truepose:
-                rospy.loginfo("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
+                rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
                                                        pozyxpose.pose.position.y - self.truepose.pose.position.y);
         else:
             rospy.logdebug("waiting for pozyx, publishing initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
