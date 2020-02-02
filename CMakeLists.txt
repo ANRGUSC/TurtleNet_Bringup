@@ -48,10 +48,16 @@ add_executable(turtlebot3_diagnostics src/turtlebot3_diagnostics.cpp)
 add_dependencies(turtlebot3_diagnostics ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(turtlebot3_diagnostics ${catkin_LIBRARIES})
 
+add_executable(simulated_pozyx_states src/simulated_pozyx_states.cpp)
+target_link_libraries(simulated_pozyx_states ${catkin_LIBRARIES})
+if(catkin_EXPORTED_TARGETS)
+    add_dependencies(simulated_pozyx_states ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+endif()
+
 ################################################################################
 # Install
 ################################################################################
-install(TARGETS turtlebot3_diagnostics
+install(TARGETS turtlebot3_diagnostics simulated_pozyx_states
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

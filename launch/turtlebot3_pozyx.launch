@@ -1,7 +1,7 @@
 <launch>
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
   <arg name="sim" default="true"/>
-  <arg name="multi_robot_name" default="tb3_0"/>
+  <arg name="multi_robot_name" default=""/>
   <arg name="anchor0" default="tb3_1"/>
   <arg name="anchor1" default="tb3_2"/>
   <arg name="anchor2" default="tb3_3"/>
@@ -12,7 +12,6 @@
   <param name="anchor0" value="$(arg anchor0)"/>
   <param name="anchor1" value="$(arg anchor1)"/>
   <param name="anchor2" value="$(arg anchor2)"/>
-  <node pkg="turtlebot3_bringup" type="pozyx.py" name="turtlebot3_pozyx" output="screen" args="$(arg sim) $(arg x_pos) $(arg y_pos) $(arg yaw)" launch-prefix="bash -c 'sleep 2; $0 $@' ">
-  </node>
+  <node pkg="turtlebot3_bringup" type="pozyx.py" name="turtlebot3_pozyx" output="screen" args="$(arg sim) $(arg x_pos) $(arg y_pos) $(arg yaw)" launch-prefix="bash -c 'sleep 2; $0 $@' "/>
 
 </launch>

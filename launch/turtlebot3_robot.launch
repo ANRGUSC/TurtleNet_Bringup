@@ -2,7 +2,7 @@
   <arg name="multi_robot_name" default=""/>
   <arg name="set_lidar_frame_id" default="base_scan"/>
   <!-- to do -->
-  <arg name="x_pos" default="0"/>
+  <!-- <arg name="x_pos" default="0"/>
   <arg name="y_pos" default="0"/>
   <arg name="yaw" default="0"/>
 
@@ -10,10 +10,10 @@
   <arg name="anchor1" default="tb3_2"/>
   <arg name="anchor2" default="tb3_3"/>
 
-  <arg name="sim" default="false"/>
+  <arg name="sim" default="false"/> -->
 
   <include file="$(find turtlebot3_bringup)/launch/turtlebot3_core.launch">
-    <arg name="port" default="$(env CORE_PORT)"/>
+    <!-- <arg name="port" default="$(env CORE_PORT)"/> -->
     <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
   </include>
 
@@ -21,7 +21,7 @@
     <arg name="set_frame_id" value="$(arg set_lidar_frame_id)"/>
   </include>
 
-  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_pozyx.launch">
+  <!-- <include file="$(find turtlebot3_bringup)/launch/turtlebot3_pozyx.launch">
       <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
       <arg name="sim" default="$(arg sim)"/>
       <arg name="anchor0" value="$(arg anchor0)"/>
@@ -30,8 +30,8 @@
       <arg name="x_pos" default="$(arg x_pos)"/>
       <arg name="y_pos" default="$(arg y_pos)"/>
       <arg name="yaw" default="$(arg yaw)"/>
-  </include>
+  </include> -->
 
-  <!-- <node pkg="turtlebot3_bringup" type="turtlebot3_diagnostics" name="turtlebot3_diagnostics" output="screen"/> -->
+  <node pkg="turtlebot3_bringup" type="turtlebot3_diagnostics" name="turtlebot3_diagnostics" output="screen"/>
 
 </launch>
