@@ -251,7 +251,7 @@ class Pozyx():
         self.pub = rospy.Publisher(rospy.get_namespace()+'pozyx_position', PoseStamped, queue_size=10)
 
         # for simulation
-        self.truepose, self.anchor0_truepose, self.anchor1_truepose, self.anchor2_truepose, self.scan_reading = None, None, None, None, None
+        self.gazebo_states, self.scan_reading = None, None
 
         # for everything
         self.anchor0, self.anchor1, self.anchor2 = None, None, None
@@ -306,6 +306,9 @@ class Pozyx():
                 self.pub.publish(self.initialpose)
         else:
             self.pub.publish(self.initialpose)
+
+    def truestate_callback(self, states):
+        self.gazebo_states = states
 
     def odom_callback(self, odometry):
         rospy.logdebug("odom callback")
@@ -397,7 +400,7 @@ class Pozyx():
         # print("distance to you should be:", str((deltay**2+deltax**2)**0.5))
         epsilon = 0.1
         # print("is obstructed?:", scan.ranges[index] < (deltay**2+deltax**2)**0.5 - epsilon)
-        return scan.ranges[index] < (deltay**2+deltax**2)**0.5 - epsilon
+        return scan.ranges[index%360] < (deltay**2+deltax**2)**0.5 - epsilon
 
     def get_gazebo_pozyx_ranges(self):
         # ranges (simulated)
@@ -426,7 +429,8 @@ class Pozyx():
                 rospy.get_param('anchor1'):(self.anchor1.position.x,self.anchor1.position.y),
                 rospy.get_param('anchor2'):(self.anchor2.position.x,self.anchor2.position.y)}
 
-        if self.sim and self.truepose and self.anchor0_truepose and self.anchor1_truepose and self.anchor2_truepose:
+        if self.sim and self.gazebo_states:
+            self.load_states(self.gazebo_states)
             dists = self.get_gazebo_pozyx_ranges()
             if dists is None:
                 rospy.loginfo(rospy.get_namespace()+": Obstacles, no position estimate.")
@@ -463,8 +467,8 @@ class Pozyx():
             rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
                                                    pozyxpose.pose.position.y - self.truepose.pose.position.y);
 
-    def truestate_callback(self, states):
-        for index, name in enumerate(states.name[::-1]):
+    def load_states(self, states):
+        for index, name in enumerate(states.name):
             if name == rospy.get_namespace()[1:-1]:
                 self.truepose = PoseStamped()
                 self.truepose.header.stamp = rospy.Time.now()
@@ -479,7 +483,6 @@ class Pozyx():
             elif name == rospy.get_param('anchor2'):
                 self.anchor2_truepose = Pose()
                 self.anchor2_truepose = states.pose[index]
-        # print("callback:", self.truepose, self.anchor0_truepose, self.anchor1_truepose, self.anchor2_truepose)
 
 if __name__ == '__main__':
     try:
