@@ -196,20 +196,23 @@ def pose_dist(p1, p2):
     return ((p1.position.x-p2.position.x)**2+(p1.position.y-p2.position.y)**2)**0.5
 
 def noise(r):
-    if r < 2:
-        return max(0, r + random.random()*0.5 - 0.1) # usually overestimates
-    if r < 6:
-        return r + random.random()*0.2 - 0.1 # almost accurate
-    else:
-        return r + random.random() - 0.25
+    return max(0, r+random.gauss(0,0.1))
 
-def reverse_noise(r):
-    if r < 2:
-        return r - 0.15
-    if r < 6:
-        return r
-    else:
-        return r - 0.25
+# def noise(r):
+#     if r < 2:
+#         return max(0, r + random.random()*0.5 - 0.1) # usually overestimates
+#     if r < 6:
+#         return r + random.random()*0.2 - 0.1 # almost accurate
+#     else:
+#         return r + random.random() - 0.25
+#
+# def reverse_noise(r):
+#     if r < 2:
+#         return r - 0.15
+#     if r < 6:
+#         return r
+#     else:
+#         return r - 0.25
 
 class Pozyx():
 
@@ -219,7 +222,7 @@ class Pozyx():
         self.p = p
         if not self.sim and self.p is None:
             rospy.loginfo("No pozyx device!")
-        self.noise = False
+        self.noise = True
         self.denoise = False
 
         try:
@@ -273,15 +276,15 @@ class Pozyx():
         q = quaternion_from_euler(0, 0, float(sys.argv[4]))
         self.initialpose.pose.orientation.x, self.initialpose.pose.orientation.y, self.initialpose.pose.orientation.z, self.initialpose.pose.orientation.w = q[0], q[1], q[2], q[3]
         rospy.loginfo("pozyx: given initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
-        self.mypose = self.initialpose
+
+        self.odompose = PoseStamped()
 
         while not rospy.is_shutdown():
             if not (self.anchor0 and self.anchor1 and self.anchor2):
                 self.set_initial_position()
-                self.mypose = self.initialpose
             else:
                 self.set_pozyx_position()
-            rospy.sleep(1) # to do: choose rate
+            rospy.sleep(0.1) # to do: choose rate
 
     def set_initial_position(self):
         if not self.sim:
@@ -312,10 +315,8 @@ class Pozyx():
 
     def odom_callback(self, odometry):
         rospy.logdebug("odom callback")
-        try:
-            self.mypose.pose.orientation = odometry.pose.pose.orientation
-        except:
-            pass
+        self.odompose.header = odometry.header
+        self.odompose.pose = odometry.pose.pose
 
     def laser_callback(self, scan):
         rospy.logdebug("scan callback")
@@ -383,39 +384,43 @@ class Pozyx():
 
     # this should be true poses
     def is_obstructed(self, scan, mypose, otherpose):
-        # print("scan angle min:", str(scan.angle_min))
-        # print("scan angle increment:", str(scan.angle_increment))
         deltay = - otherpose.position.y + mypose.position.y
         deltax = otherpose.position.x - mypose.position.x
-        # print("deltay:", str(deltay))
-        # print("deltax:", str(deltax))
-        # print("angle from me to you:", str(math.atan2(deltax, deltay)))
+        angle_ = math.atan2(deltax, deltay)
         yaw = euler_from_quaternion((mypose.orientation.x,mypose.orientation.y,mypose.orientation.z,mypose.orientation.w))[2]
-        # print("my heading:", str(yaw))
-        check = -(math.pi/2-math.atan2(deltax, deltay)-yaw)
-        # print("search angle:", str(check), str(check*180/math.pi))
+        check = angle_%(2*math.pi) - (math.pi/2 + yaw)
         index = int(round((check-scan.angle_min)/scan.angle_increment))
-        # print("search index:", str(index))
-        # print("scan reading at search angle:", str(scan.ranges[index]))
-        # print("distance to you should be:", str((deltay**2+deltax**2)**0.5))
         epsilon = 0.1
-        # print("is obstructed?:", scan.ranges[index] < (deltay**2+deltax**2)**0.5 - epsilon)
-        return scan.ranges[index%360] < (deltay**2+deltax**2)**0.5 - epsilon
+        is_obstructed = scan.ranges[index%360] < (deltay**2+deltax**2)**0.5 - epsilon
+        # if is_obstructed:
+        #     if rospy.get_namespace() == "/tb3_0/":
+        #         print("scan angle min:", str(scan.angle_min))
+        #         print("scan angle increment:", str(scan.angle_increment))
+        #         print("deltay:", str(deltay))
+        #         print("deltax:", str(deltax))
+        #         print("angle from me to you:", str(angle_))
+        #         print("my heading:", str(yaw))
+        #         print("search angle:", str(check), str(check*180/math.pi))
+        #         print("search index:", str(index))
+        #         print("scan reading at search angle:", str(scan.ranges[index%360]))
+        #         print("distance to you should be:", str((deltay**2+deltax**2)**0.5))
+        #         print("is obstructed?:", scan.ranges[index] < (deltay**2+deltax**2)**0.5 - epsilon)
+        return is_obstructed
 
     def get_gazebo_pozyx_ranges(self):
         # ranges (simulated)
         if self.noise: # switch this back to truepose for gazebo
-            r0 = noise(pose_dist(self.truepose.pose,self.anchor0))
-            r1 = noise(pose_dist(self.truepose.pose,self.anchor1))
-            r2 = noise(pose_dist(self.truepose.pose,self.anchor2))
+            r0 = noise(pose_dist(self.truepose.pose,self.anchor0_truepose))
+            r1 = noise(pose_dist(self.truepose.pose,self.anchor1_truepose))
+            r2 = noise(pose_dist(self.truepose.pose,self.anchor2_truepose))
             if self.denoise:
                 dists = {rospy.get_param('anchor0'):reverse_noise(r0), rospy.get_param('anchor1'):reverse_noise(r1), rospy.get_param('anchor2'):reverse_noise(r2)}
             else:
-                dists = {rospy.get_param('anchor0'):reverse_noise(r0), rospy.get_param('anchor1'):reverse_noise(r1), rospy.get_param('anchor2'):reverse_noise(r2)}
+                dists = {rospy.get_param('anchor0'):r0, rospy.get_param('anchor1'):r1, rospy.get_param('anchor2'):r2}
         else:
-            r0 = pose_dist(self.truepose.pose,self.anchor0)
-            r1 = pose_dist(self.truepose.pose,self.anchor1)
-            r2 = pose_dist(self.truepose.pose,self.anchor2)
+            r0 = pose_dist(self.truepose.pose,self.anchor0_truepose)
+            r1 = pose_dist(self.truepose.pose,self.anchor1_truepose)
+            r2 = pose_dist(self.truepose.pose,self.anchor2_truepose)
             dists = {rospy.get_param('anchor0'):r0, rospy.get_param('anchor1'):r1, rospy.get_param('anchor2'):r2}
         if self.scan_reading:
             if not (self.is_obstructed(self.scan_reading, self.truepose.pose, self.anchor0_truepose) or \
@@ -431,13 +436,16 @@ class Pozyx():
 
         if self.sim and self.gazebo_states:
             self.load_states(self.gazebo_states)
-            dists = self.get_gazebo_pozyx_ranges()
+            try:
+                dists = self.get_gazebo_pozyx_ranges()
+            except:
+                return
             if dists is None:
-                rospy.loginfo(rospy.get_namespace()+": Obstacles, no position estimate.")
+                rospy.loginfo(rospy.get_namespace()+" (obstacles): estimated position: %.3f %.3f", self.odompose.pose.position.x, self.odompose.pose.position.y)
+                self.pub.publish(self.odompose)
                 return
         elif self.sim:
-            print(rospy.get_namespace(), self.truepose is None, self.anchor0_truepose is None, self.anchor1_truepose is None, self.anchor2_truepose is None)
-            rospy.loginfo(rospy.get_namespace()+": not reading gazebo...")
+            rospy.loginfo(rospy.get_namespace()+": don't have gazebo states yet")
             return
 
         else:
@@ -458,10 +466,9 @@ class Pozyx():
             pozyxpose.pose.orientation = self.truepose.pose.orientation
         else: # real
             pozyxpose.pose.position.z = 0
-            pozyxpose.pose.orientation = self.mypose.pose.orientation # figure out yaw from odom
+            pozyxpose.pose.orientation = self.odom_posestamped.pose.orientation # figure out yaw from odom
         rospy.loginfo(rospy.get_namespace()+": estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
         self.pub.publish(pozyxpose)
-        self.mypose = pozyxpose
 
         if self.truepose:
             rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
