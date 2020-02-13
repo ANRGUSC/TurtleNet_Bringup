@@ -12,6 +12,6 @@
   <param name="anchor0" value="$(arg anchor0)"/>
   <param name="anchor1" value="$(arg anchor1)"/>
   <param name="anchor2" value="$(arg anchor2)"/>
-  <node pkg="turtlebot3_bringup" type="pozyx.py" name="turtlebot3_pozyx" output="screen" args="$(arg sim) $(arg x_pos) $(arg y_pos) $(arg yaw)" launch-prefix="bash -c 'sleep 2; $0 $@' "/>
+  <node pkg="turtlebot3_bringup" type="pozyx.py" name="turtlebot3_pozyx" output="screen" args="$(arg sim) $(arg x_pos) $(arg y_pos) $(arg yaw)" launch-prefix="bash -c 'sleep 5; $0 $@' "/>
 
 </launch>

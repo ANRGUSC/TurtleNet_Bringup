@@ -13,7 +13,7 @@
   <arg name="sim" default="false"/> -->
 
   <include file="$(find turtlebot3_bringup)/launch/turtlebot3_core.launch">
-    <!-- <arg name="port" default="$(env CORE_PORT)"/> -->
+    <arg name="port" default="$(env CORE_PORT)"/>
     <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
   </include>
 

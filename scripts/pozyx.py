@@ -18,6 +18,7 @@ import math
 import numpy as np
 import itertools as it
 from copy import deepcopy
+import os
 
 from pypozyx import (PozyxSerial, PozyxConstants, version,
                      SingleRegister, DeviceRange, DeviceList,
@@ -51,7 +52,7 @@ def get_angle(d1, d2, sep):
     else:
         return math.asin(ratio)
 
-def triangulate(node_data, a_nodelist, previous_pose):
+def triangulate(node_data, a_nodelist, previous_pose, tb3_3_first_try=False):
     old_coor = (previous_pose.pose.position.x, previous_pose.pose.position.y)
     anchor_coor = list(a_nodelist.values())
     anchor_id = list(a_nodelist.keys())
@@ -122,12 +123,12 @@ def triangulate(node_data, a_nodelist, previous_pose):
         node_dist2 = abs(np.linalg.norm(np.subtract(c, node_vec2)) - d3)
 
         if(node_dist1 <= node_dist2):
-            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.20:
+            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.20 or tb3_3_first_try:
                 estimates.append(node_vec1)
             else:
                 rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
         else:
-            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.20:
+            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.20 or tb3_3_first_try:
                 estimates.append(node_vec2)
             else:
                 rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
@@ -204,7 +205,7 @@ def pose_dist(p1, p2):
     return ((p1.position.x-p2.position.x)**2+(p1.position.y-p2.position.y)**2)**0.5
 
 def noise(r):
-    return max(0, r+random.gauss(0,0.05))
+    return max(0, r+random.gauss(0,0.10))
 
 # def noise(r):
 #     if r < 2:
@@ -286,10 +287,13 @@ class Pozyx():
 
         self.odompose = PoseStamped()
 
+        self.skip_jump_avoidance = (rospy.get_namespace() == "/tb3_3/")
+
         while not rospy.is_shutdown():
             if not (self.anchor0 and self.anchor1 and self.anchor2):
                 self.set_initial_position()
             else:
+                rospy.loginfo("RECEIVED ALL ANCHOR POSITIONS")
                 self.set_pozyx_position()
             rospy.sleep(0.02) # to do: choose rate
             # rospy.sleep(1)
@@ -309,12 +313,13 @@ class Pozyx():
                 rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
                 self.pub.publish(self.initialpose)
             elif rospy.get_namespace() == "/tb3_2/":
-                while self.anchor1 is None:
-                    pass
-                tb3_1x = self.anchor1.position.x
-                self.initialpose.pose.position.x, self.initialpose.pose.position.y = diangulate({"tb3_0":dists['tb3_0'], "tb3_1":dists['tb3_1']},{"tb3_0":(0,0), "tb3_1":(tb3_1x,0)})
-                rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
-                self.pub.publish(self.initialpose)
+                if self.anchor1:
+                    tb3_1x = self.anchor1.position.x
+                    self.initialpose.pose.position.x, self.initialpose.pose.position.y = diangulate({"tb3_0":dists['tb3_0'], "tb3_1":dists['tb3_1']},{"tb3_0":(0,0), "tb3_1":(tb3_1x,0)})
+                    rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+                    self.pub.publish(self.initialpose)
+                else:
+                    rospy.loginfo("waiting for anchor1")
         else:
             self.pub.publish(self.initialpose)
         self.previous_pose = deepcopy(self.initialpose)
@@ -377,7 +382,7 @@ class Pozyx():
                         if dist_counts[self.anchor_device[tb]] != 0:
                             dists[tb] = round(dist_sums[self.anchor_device[tb]]/dist_counts[self.anchor_device[tb]],2)
                 if len(dists) < 2:
-                    rospy.loginfo("not all anchors found, ranged:",len(dists))
+                    rospy.loginfo("not all anchors found")
                 return dists
 
         except KeyboardInterrupt:
@@ -478,10 +483,11 @@ class Pozyx():
         ####################################
         if len(dists) < 2:
             ##### TODO #########
-            self.pub.publish(self.odompose)
-            self.previous_pose = deepcopy(self.odompose)
-            self.previous_odompose = deepcopy(self.odompose)
-            return
+            # self.pub.publish(self.odompose)
+            # self.previous_pose = deepcopy(self.odompose)
+            # self.previous_odompose = deepcopy(self.odompose)
+            # rospy.loginfo(rospy.get_namespace()+"(obstacles): estimated position: %.3f %.3f", self.odompose.pose.position.x, self.odompose.pose.position.y)
+            # return
             vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
             new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
             recoverypose = PoseStamped()
@@ -507,31 +513,36 @@ class Pozyx():
                 coords["me"] = (self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)
                 dists["me"] = pose_dist(self.previous_odompose.pose,self.odompose.pose)
                 # ##### TODO #########
-                # vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
-                # new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
-                # recoverypose = PoseStamped()
-                # recoverypose.header.stamp = rospy.Time.now()
-                # recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
-                # recoverypose.pose.position.x, recoverypose.pose.position.y = new
-                # recoverypose.pose.orientation = self.odompose.pose.orientation ## YAW
-                # rospy.loginfo(rospy.get_namespace()+"(obstacles): estimated position: %.3f %.3f", recoverypose.pose.position.x, recoverypose.pose.position.y)
-                # self.pub.publish(recoverypose)
-                # self.previous_pose = deepcopy(recoverypose)
-                # self.previous_odompose = deepcopy(self.odompose)
-                # return
-                self.pub.publish(self.odompose)
-                self.previous_pose = deepcopy(self.odompose)
+                vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
+                new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
+                recoverypose = PoseStamped()
+                recoverypose.header.stamp = rospy.Time.now()
+                recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
+                recoverypose.pose.position.x, recoverypose.pose.position.y = new
+                recoverypose.pose.orientation = self.odompose.pose.orientation ## YAW
+                rospy.loginfo(rospy.get_namespace()+"(obstacles): estimated position: %.3f %.3f", recoverypose.pose.position.x, recoverypose.pose.position.y)
+                self.pub.publish(recoverypose)
+                self.previous_pose = deepcopy(recoverypose)
                 self.previous_odompose = deepcopy(self.odompose)
                 return
-                rospy.loginfo(rospy.get_namespace()+"(recovery): only received 2 pozyx ranges, using previous pose coords and traveled dist"+str(dists["me"]))
+                # self.pub.publish(self.odompose)
+                # self.previous_pose = deepcopy(self.odompose)
+                # self.previous_odompose = deepcopy(self.odompose)
+                # rospy.loginfo(rospy.get_namespace()+"(recovery): only received 2 pozyx ranges, using previous pose coords and traveled dist"+str(dists["me"]))
+                # return
         ############################################
-        my_location = triangulate(dists,coords,self.previous_pose)
+        if self.skip_jump_avoidance:
+            my_location = triangulate(dists,coords,self.previous_pose,tb3_3_first_try=True)
+            self.skip_jump_avoidance = False
+        else:
+            my_location = triangulate(dists,coords,self.previous_pose)
         if my_location is None:
             ##### TODO #########
-            self.pub.publish(self.odompose)
-            self.previous_pose = deepcopy(self.odompose)
-            self.previous_odompose = deepcopy(self.odompose)
-            return
+            # self.pub.publish(self.odompose)
+            # self.previous_pose = deepcopy(self.odompose)
+            # self.previous_odompose = deepcopy(self.odompose)
+            # rospy.loginfo(rospy.get_namespace()+"(jump ignored): estimated position: %.3f %.3f", self.odompose.pose.position.x, self.odompose.pose.position.y)
+            # return
             # instead of going straight to odom, delta odom plus previous pose
             vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
             new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
@@ -554,20 +565,20 @@ class Pozyx():
         # yaw = math.atan2(vec[1],vec[0])
         # q = quaternion_from_euler(0, 0, yaw)
         # pozyxpose.pose.orientation.x, pozyxpose.pose.orientation.y, pozyxpose.pose.orientation.z, pozyxpose.pose.orientation.w = q[0], q[1], q[2], q[3]
-        if self.truepose: # simulated
-            pozyxpose.pose.position.z = self.truepose.pose.position.z
-            pozyxpose.pose.orientation = self.truepose.pose.orientation ## YAW
-        else: # real
-            pozyxpose.pose.position.z = 0
-            pozyxpose.pose.orientation = self.odompose.pose.orientation ## YAW
+        # if self.truepose: # simulated
+        #     pozyxpose.pose.position.z = self.truepose.pose.position.z
+        #     pozyxpose.pose.orientation = self.truepose.pose.orientation ## YAW
+        # else: # real
+        pozyxpose.pose.position.z = 0
+        pozyxpose.pose.orientation = self.odompose.pose.orientation ## YAW
 
         rospy.loginfo(rospy.get_namespace()+": estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
         self.pub.publish(pozyxpose)
         self.previous_pose = deepcopy(pozyxpose)
         self.previous_odompose = deepcopy(self.odompose)
-        if self.truepose:
-            rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
-                                                   pozyxpose.pose.position.y - self.truepose.pose.position.y);
+        # if self.truepose:
+        #     rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
+        #                                            pozyxpose.pose.position.y - self.truepose.pose.position.y);
 
     def load_states(self, states):
         found = 0
@@ -603,7 +614,9 @@ if __name__ == '__main__':
             ports = get_pozyx_ports()
             for i in range(len(ports)):
                 try:
-                    p = PozyxSerial(ports[i])
+                    if ports[i] != os.environ['CORE_PORT']:
+                        p = PozyxSerial(ports[i])
+                        break
                 except:
                     pass
             if p is None:
