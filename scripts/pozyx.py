@@ -124,12 +124,12 @@ def triangulate(node_data, a_nodelist, previous_pose, tb3_3_first_try=False):
 
 
         if(node_dist1 <= node_dist2):
-            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.5 or tb3_3_first_try:
+            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.3 or tb3_3_first_try:
                 estimates.append(node_vec1)
             else:
                 rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
         else:
-            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.5 or tb3_3_first_try:
+            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.3 or tb3_3_first_try:
                 estimates.append(node_vec2)
             else:
                 rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
@@ -296,8 +296,8 @@ class Pozyx():
             else:
                 rospy.logdebug("RECEIVED ALL ANCHOR POSITIONS")
                 self.set_pozyx_position()
-            # rospy.sleep(0.02) # to do: choose rate
-            rospy.sleep(0.1)
+            rospy.sleep(0.02) # to do: choose rate
+            # rospy.sleep(0.1)
 
     def set_initial_position(self):
         if not self.sim:
@@ -510,7 +510,7 @@ class Pozyx():
 
             # vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
             # new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
-            new = self.initialpose.pose.position.x+self.odompose.pose.position.x, self.initialpose.pose.position.y+self.odompose.pose.position.y
+            new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
             recoverypose = PoseStamped()
             recoverypose.header.stamp = rospy.Time.now()
             recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
@@ -541,7 +541,7 @@ class Pozyx():
                 # return
                 # vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
                 # new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
-                new = self.initialpose.pose.position.x+self.odompose.pose.position.x, self.initialpose.pose.position.y+self.odompose.pose.position.y
+                new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
                 recoverypose = PoseStamped()
                 recoverypose.header.stamp = rospy.Time.now()
                 recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
@@ -567,7 +567,7 @@ class Pozyx():
             # instead of going straight to odom, delta odom plus previous pose
             # vec = np.subtract([self.odompose.pose.position.x,self.odompose.pose.position.y],[self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y])
             # new = np.add([self.previous_pose.pose.position.x,self.previous_pose.pose.position.y],vec)
-            new = self.initialpose.pose.position.x+self.odompose.pose.position.x, self.initialpose.pose.position.y+self.odompose.pose.position.y
+            new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
             recoverypose = PoseStamped()
             recoverypose.header.stamp = rospy.Time.now()
             recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
@@ -607,7 +607,7 @@ class Pozyx():
         if self.skip_jump_avoidance:
             self.initialpose = deepcopy(pozyxpose)
             self.skip_jump_avoidance = False
-            
+
         if self.truepose:
             rospy.logdebug("pozyx error: %.3f %.3f", pozyxpose.pose.position.x - self.truepose.pose.position.x,
                                                    pozyxpose.pose.position.y - self.truepose.pose.position.y);
