@@ -361,8 +361,10 @@ class Pozyx():
 
     def get_pozyx_ranges(self):
         try:
-            if (self.networkId.value == 26712 and 0 <= time.time() % 4 < 0.5) or (self.networkId.value == 26714 and 1.0 <= time.time() % 4 < 1.5) or \
-                (self.networkId.value == 26718 and 2.0 <= time.time() % 4 < 2.5) or (self.networkId.value == 26646 and 3.0 <= time.time() % 4 < 3.5):
+            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.5) or \
+                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.5) or \
+                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.5) or \
+                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.5):
                 dist_sums = {}
                 for tb in self.anchor_device.keys():
                     if self.anchor_device[tb] != self.networkId.value:
