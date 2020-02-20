@@ -124,15 +124,15 @@ def triangulate(node_data, a_nodelist, previous_pose, tb3_3_first_try=False):
 
 
         if(node_dist1 <= node_dist2):
-            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.3 or tb3_3_first_try:
+            if np.linalg.norm(np.subtract(node_vec1,old_coor)) < 0.5 or tb3_3_first_try:
                 estimates.append(node_vec1)
             else:
-                rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
+                rospy.loginfo("POZYX ESTIMATE JUMP IGNORED")
         else:
-            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.3 or tb3_3_first_try:
+            if np.linalg.norm(np.subtract(node_vec2,old_coor)) < 0.5 or tb3_3_first_try:
                 estimates.append(node_vec2)
             else:
-                rospy.logdebug("POZYX ESTIMATE JUMP IGNORED")
+                rospy.loginfo("POZYX ESTIMATE JUMP IGNORED")
 
         # print("***********************")
     if len(estimates) == 0:
@@ -296,8 +296,8 @@ class Pozyx():
             else:
                 rospy.logdebug("RECEIVED ALL ANCHOR POSITIONS")
                 self.set_pozyx_position()
-            rospy.sleep(0.02) # to do: choose rate
-            # rospy.sleep(0.1)
+            # rospy.sleep(0.02) # to do: choose rate
+            rospy.sleep(0.1)
 
     def set_initial_position(self):
         if not self.sim:
@@ -384,7 +384,7 @@ class Pozyx():
                                 # RSS_averages[dev]=ranges[dev].RSS
                                 dist_counts[dev]+=1
                             else:
-                                print("THIS IS WRONG")
+                                print("Bad pozyx read:",self.networkId.value,"ranging",dev)
                 dists = {}
                 for tb in self.anchor_device.keys():
                     if self.anchor_device[tb] != self.networkId.value:
@@ -556,9 +556,8 @@ class Pozyx():
                 return
         ############################################
         if self.skip_jump_avoidance:
-            my_location = triangulate(dists,coords,self.previous_pose,tb3_3_first_try=True)
-        else:
-            my_location = triangulate(dists,coords,self.previous_pose)
+            print("tb3_3 is allowed to jump at first")
+        my_location = triangulate(dists,coords,self.previous_pose,self.skip_jump_avoidance)
         if my_location is None:
             ##### TODO #########
             # self.pub.publish(self.odompose)
