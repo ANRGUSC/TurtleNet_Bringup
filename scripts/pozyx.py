@@ -289,8 +289,8 @@ class Pozyx():
             else:
                 rospy.logdebug("RECEIVED ALL ANCHOR POSITIONS")
                 self.set_pozyx_position()
-            # rospy.sleep(0.02) # to do: choose rate
-            rospy.sleep(0.1)
+            rospy.sleep(0.02) # to do: choose rate
+            # rospy.sleep(0.1)
 
     def set_initial_position(self):
         if not self.sim:
