@@ -495,6 +495,7 @@ class Pozyx():
         odom_distance_traveled = np.linalg.norm(np.subtract((self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y),(self.odompose.pose.position.x,self.odompose.pose.position.y)))
         if pozyx_distance_traveled > (0.2 + odom_distance_traveled) and not self.skip_jump_avoidance:
             self.recover("jumped ignored")
+            return
         ################################################
         pozyxpose = PoseStamped()
         pozyxpose.header.stamp = rospy.Time.now()
