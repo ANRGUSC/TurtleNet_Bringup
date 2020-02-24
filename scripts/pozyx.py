@@ -430,6 +430,10 @@ class Pozyx():
         return dists
 
     def recover(self, message=""):
+        if self.sim:
+            rospy.loginfo(message+" odom: %.3f %.3f", self.odompose.pose.position.x, self.odompose.pose.position.y)
+            self.pub.publish(self.odompose)
+            return
         new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
         recoverypose = PoseStamped()
         recoverypose.header.stamp = rospy.Time.now()
