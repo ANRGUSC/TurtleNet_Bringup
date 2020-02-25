@@ -43,7 +43,7 @@ bool Turtlebot3Drive::init()
 
   // initialize variables
   escape_range_       = 30.0 * DEG2RAD;
-  check_forward_dist_ = 0.7;
+  check_forward_dist_ = 3.0;
   check_side_dist_    = 0.6;
 
   tb3_pose_ = 0.0;
@@ -127,51 +127,15 @@ void MakeTurn(int direction, Turtlebot3Drive* tb) {
   tb->updatecommandVelocity(0,0); 
 }
 
-// drives straight for a specified amount of time
-void DriveStraight(int drive_time) {
+// Drive straight
+void DriveStraight(Turtlebot3Drive* tb) {
   double linear_speed = 1.2;
   tb->updatecommandVelocity(linear_speed,0); 
-  thread.sleep(drive_time); 
-  tb->updatecommandVelocity(0,0); 
 }
 
-
-/*******************************************************************************
-* Control Loop function
-*******************************************************************************/
-bool Turtlebot3Drive::controlLoop(Turtlebot3Drive* tb)
-{
-  static uint8_t turtlebot3_state_num = 0;
-
-  // one Burger moving at a time
-  std::vector<double> distances;
-
-  int num_readings = 360 / precision; 
-
-  distances = GetDistances(num_readings); 
-
-  // the integer passed in is the angle you need to go 
-  std::vector<int> paths;   // the available paths
-  paths = FindPaths(distances);      
-  int direction = -1;       // the direction you end up going
-
-  // blocked, no hall detected (could be blocked by another burger)
-  if(paths.size() == 0) {
-    return false; 
-  }
-  else { // randomly pick one of these valid paths
-    direction = paths[rand() % paths.size()]; 
-  }
-
-  // calls update command velocity to turn some distance (in degrees)
-  // starts turning and stops turning 
-  MakeTurn(direction, tb); 
-
-  // drives straight for a specified amount of time
-  int time_driving = 0;
-  DriveStraight(time_driving);
-
-  return true;
+// Stop all motion
+void Stop(Turtlebot3Drive* tb) {
+	tb->updatecommandVelocity(0,0);
 }
 
 /*******************************************************************************
@@ -185,15 +149,38 @@ int main(int argc, char* argv[])
 
   ros::Rate loop_rate(125);
 
+  int state_num = 0;
+
+  /* Infinte While */
   while (ros::ok())
   {
-    // see if it did not moved
-    if(!turtlebot3_drive.controlLoop()) {
-      turns_without_moving++;
-    }
-    if(turns_without_moving > 5) {
+	// Check if straight is clear
+  	if(tb->scan_data_[CENTER] > check_forward_dist_)
+  	{
+  		state_num = 0;
+  	}
+  	else{
+  		state_num = 1;
+  	}
 
-    }
+  	/* Drive Control Logic */
+  	switch (state_num){
+  		// If nothing within 3.5m straight ahead, drive straight
+  		case TB3_DRIVE_FORWARD:
+  			DriveStraight(turtlebot3_drive);
+  			break;
+
+  		// If something within 3.5m straight ahead, stop
+  		case TB3_STOP:
+  			Stop(turtlebot3_drive);
+  			break;
+
+  		default:
+  			Stop(turtlebot3_drive);
+  			break;
+  	}
+  	/* End Drive Control Logic */
+
     ros::spinOnce();
     loop_rate.sleep();
   }
