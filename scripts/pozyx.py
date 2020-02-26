@@ -225,7 +225,7 @@ class Pozyx():
         self.p = p
         if not self.sim and self.p is None:
             rospy.loginfo("No pozyx device!")
-        self.denoise = False
+        self.denoise = True
 
         try:
             rospy.get_param('anchor0')
@@ -289,8 +289,8 @@ class Pozyx():
             else:
                 rospy.logdebug("RECEIVED ALL ANCHOR POSITIONS")
                 self.set_pozyx_position()
-            # rospy.sleep(0.02) # to do: choose rate
-            rospy.sleep(0.1)
+            rospy.sleep(0.02) # to do: choose rate
+            # rospy.sleep(0.1)
 
     def set_initial_position(self):
         if not self.sim:
@@ -354,12 +354,45 @@ class Pozyx():
         self.anchor2 = pose_stamped.pose
         # self.anchor2time = pose_stamped.header.stamp
 
+    def denoise(self,d,dev):
+        # d = self.ranges[dev].distance/1000.0
+        if self.networkId.value == 26718: # 0
+            if dev == 26646: # 1
+                d = d + (1.55-1.53)
+            if dev == 26712: # 2
+                d = d + (4.29-4.31)
+            if dev == 26714: # 3
+                d = d + (4.0-4.13) + (4.0-3.99)
+        if self.networkId.value == 26646: # 1
+            if dev == 26712: # 2
+                d = d + (4.0-4.09)
+            if dev == 26718: # 0
+                d = d + (1.55-1.53)
+            if dev == 26714: # 3
+                d = d - 0.2 + (4.29-4.44)
+        if self.networkId.value == 26712: # 2
+            if dev == 26718: # 0
+                d = d + (4.29-4.33)
+            if dev == 26646: # 1
+                d = d + (4.0-4.08)
+            if dev == 26714: # 3
+                d = d + (1.55-1.6)
+        if self.networkId.value == 26714: # 3
+            if dev == 26718: # 0
+                d = d + (4.0-4.14) + (4.0-3.99)
+            if dev == 26646: # 1
+                d = d - 0.2 + (4.29-4.45) + (4.29-4.25)
+            if dev == 26712: # 2
+                d = d + (1.55-1.61)
+        return d
+        # dist_sums[dev]+=(d)
+
     def get_pozyx_ranges(self):
         try:
-            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.5) or \
-                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.5) or \
-                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.5) or \
-                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.5):
+            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.4) or \
+                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.4) or \
+                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.4) or \
+                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.4):
                 dist_sums = {}
                 for tb in self.anchor_device.keys():
                     if self.anchor_device[tb] != self.networkId.value:
@@ -372,10 +405,11 @@ class Pozyx():
                     for dev in list(self.ranges.keys()):
                         if p.doRanging(dev,self.ranges[dev]):
                             if self.ranges[dev].distance != 0: # distance can't be zero but sometimes the pozyx says it's successful but published zero!!!!!!!!!! a problem
-                                if self.denoise: # to do
-                                    dist_sums[dev]+=(self.ranges[dev].distance/1000.0-0.2)
+                                d = self.ranges[dev].distance/1000.0
+                                if self.denoise:
+                                    dist_sums[dev]+=(self.denoise(d),dev)
                                 else:
-                                    dist_sums[dev]+=self.ranges[dev].distance/1000.0
+                                    dist_sums[dev]+=d
                                 # RSS_averages[dev]=ranges[dev].RSS
                                 dist_counts[dev]+=1
                             else:
@@ -430,6 +464,10 @@ class Pozyx():
         return dists
 
     def recover(self, message=""):
+        if self.sim:
+            rospy.loginfo(message+" odom: %.3f %.3f", self.odompose.pose.position.x, self.odompose.pose.position.y)
+            self.pub.publish(self.odompose)
+            return
         new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
         recoverypose = PoseStamped()
         recoverypose.header.stamp = rospy.Time.now()
