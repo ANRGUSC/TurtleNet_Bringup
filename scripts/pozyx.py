@@ -226,6 +226,7 @@ class Pozyx():
         if not self.sim and self.p is None:
             rospy.loginfo("No pozyx device!")
         self.denoise = True
+        self.known_inits = True
 
         try:
             rospy.get_param('anchor0')
@@ -285,41 +286,72 @@ class Pozyx():
 
         while not rospy.is_shutdown():
             if not (self.anchor0 and self.anchor1 and self.anchor2):
-                self.set_initial_position()
+                if self.sim:
+                    self.set_given_position()
+                elif self.known_inits:
+                    self.set_given_position()
+                    self.calibrated = False
+                else:
+                    self.assume_initial_position()
+                    self.calibrated = True
             else:
                 rospy.logdebug("RECEIVED ALL ANCHOR POSITIONS")
-                self.set_pozyx_position()
-            rospy.sleep(0.02) # to do: choose rate
-            # rospy.sleep(0.1)
+                if self.calibrated:
+                    self.set_pozyx_position()
+                elif self.calibrate():
+                    self.set_pozyx_position()
+            # rospy.sleep(0.02) # to do: choose rate
+            rospy.sleep(0.1)
 
-    def set_initial_position(self):
-        if not self.sim:
+    def calibrate(self):
+        rospy.loginfo("calibrating...")
+        assert self.anchor0 and self.anchor1 and self.anchor2
+        dists = self.get_pozyx_ranges()
+        while dists is None:
             dists = self.get_pozyx_ranges()
-            while dists is None:
-                dists = self.get_pozyx_ranges()
-            rospy.loginfo(dists)
-            if rospy.get_namespace() == "/tb3_0/":
-                self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, 0
-                rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
-                self.pub.publish(self.initialpose)
-            elif rospy.get_namespace() == "/tb3_1/":
-                self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, -dists['tb3_0']
-                rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
-                self.pub.publish(self.initialpose)
-            elif rospy.get_namespace() == "/tb3_2/":
-                if self.anchor1:
-                    tb3_1y = self.anchor1.position.y
-                    my_location = diangulate({"tb3_0":dists['tb3_0'], "tb3_1":dists['tb3_1']},{"tb3_0":(0,0), "tb3_1":(0,tb3_1y)})
-                    if my_location:
-                        self.initialpose.pose.position.x, self.initialpose.pose.position.y = my_location
-                        rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
-                        self.pub.publish(self.initialpose)
-                else:
-                    rospy.loginfo("waiting for anchor1")
-        else:
-            self.pub.publish(self.initialpose)
+        t0 = pose_dist(self.initialpose.pose, self.anchor0)
+        r0 = dists[rospy.get_param('anchor0')]
+        t1 = pose_dist(self.initialpose.pose, self.anchor1)
+        r1 = dists[rospy.get_param('anchor1')]
+        t2 = pose_dist(self.initialpose.pose, self.anchor2)
+        r2 = dists[rospy.get_param('anchor2')]
+        self.offset = {self.anchor_device[rospy.get_param('anchor0')]:(t0-r0),
+                        self.anchor_device[rospy.get_param('anchor1')]:(t1-r1),
+                        self.anchor_device[rospy.get_param('anchor2')]:(t2-r2)}
+        print(self.offset)
+        self.calibrated = True
+        return True
+
+    def set_given_position(self):
+        rospy.loginfo("publishing initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+        self.pub.publish(self.initialpose)
         self.previous_pose = deepcopy(self.initialpose)
         self.previous_odompose = deepcopy(self.odompose)
+
+    def assume_initial_position(self):
+        assert not self.sim
+        dists = self.get_pozyx_ranges()
+        while dists is None:
+            dists = self.get_pozyx_ranges()
+        rospy.loginfo(dists)
+        if rospy.get_namespace() == "/tb3_0/":
+            self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, 0
+            rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+            self.pub.publish(self.initialpose)
+        elif rospy.get_namespace() == "/tb3_1/":
+            self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, -dists['tb3_0']
+            rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+            self.pub.publish(self.initialpose)
+        elif rospy.get_namespace() == "/tb3_2/":
+            if self.anchor1:
+                tb3_1y = self.anchor1.position.y
+                my_location = diangulate({"tb3_0":dists['tb3_0'], "tb3_1":dists['tb3_1']},{"tb3_0":(0,0), "tb3_1":(0,tb3_1y)})
+                if my_location:
+                    self.initialpose.pose.position.x, self.initialpose.pose.position.y = my_location
+                    rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
+                    self.pub.publish(self.initialpose)
+            else:
+                rospy.loginfo("waiting for anchor1")
 
     def truestate_callback(self, states):
         self.gazebo_states = states
@@ -389,10 +421,10 @@ class Pozyx():
 
     def get_pozyx_ranges(self):
         try:
-            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.4) or \
-                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.4) or \
-                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.4) or \
-                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.4):
+            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.5) or \
+                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.5) or \
+                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.5) or \
+                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.5):
                 dist_sums = {}
                 for tb in self.anchor_device.keys():
                     if self.anchor_device[tb] != self.networkId.value:
@@ -406,8 +438,8 @@ class Pozyx():
                         if p.doRanging(dev,self.ranges[dev]):
                             if self.ranges[dev].distance != 0: # distance can't be zero but sometimes the pozyx says it's successful but published zero!!!!!!!!!! a problem
                                 d = self.ranges[dev].distance/1000.0
-                                if self.denoise:
-                                    dist_sums[dev]+=(self.denoise(d),dev)
+                                if self.denoise and self.calibrated:
+                                    dist_sums[dev]+=self.offset[dev]
                                 else:
                                     dist_sums[dev]+=d
                                 # RSS_averages[dev]=ranges[dev].RSS
