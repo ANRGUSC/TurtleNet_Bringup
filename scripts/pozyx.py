@@ -309,6 +309,10 @@ class Pozyx():
         dists = self.get_pozyx_ranges()
         while dists is None:
             dists = self.get_pozyx_ranges()
+        print(dists)
+        if len(dists) < 3:
+            rospy.loginfo("Uh oh, can't calibrate without all three anchors!")
+            return
         t0 = pose_dist(self.initialpose.pose, self.anchor0)
         r0 = dists[rospy.get_param('anchor0')]
         t1 = pose_dist(self.initialpose.pose, self.anchor1)
@@ -352,6 +356,8 @@ class Pozyx():
                     self.pub.publish(self.initialpose)
             else:
                 rospy.loginfo("waiting for anchor1")
+        self.previous_pose = deepcopy(self.initialpose)
+        self.previous_odompose = deepcopy(self.odompose)
 
     def truestate_callback(self, states):
         self.gazebo_states = states
@@ -421,10 +427,10 @@ class Pozyx():
 
     def get_pozyx_ranges(self):
         try:
-            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.5) or \
-                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.5) or \
-                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.5) or \
-                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.5):
+            if (self.networkId.value == 26718 and 0.0 <= time.time() % 20 < 4.4) or \
+                (self.networkId.value == 26646 and 5.0 <= time.time() % 20 < 9.4) or \
+                (self.networkId.value == 26712 and 10.0 <= time.time() % 20 < 14.4) or \
+                (self.networkId.value == 26714 and 15.0 <= time.time() % 20 < 19.4):
                 dist_sums = {}
                 for tb in self.anchor_device.keys():
                     if self.anchor_device[tb] != self.networkId.value:
@@ -439,9 +445,9 @@ class Pozyx():
                             if self.ranges[dev].distance != 0: # distance can't be zero but sometimes the pozyx says it's successful but published zero!!!!!!!!!! a problem
                                 d = self.ranges[dev].distance/1000.0
                                 if self.denoise and self.calibrated:
-                                    dist_sums[dev]+=self.offset[dev]
+                                    dist_sums[dev] += d + self.offset[dev]
                                 else:
-                                    dist_sums[dev]+=d
+                                    dist_sums[dev] += d
                                 # RSS_averages[dev]=ranges[dev].RSS
                                 dist_counts[dev]+=1
                             else:
@@ -563,7 +569,7 @@ class Pozyx():
 
         pozyx_distance_traveled = np.linalg.norm(np.subtract(my_location,(self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)))
         odom_distance_traveled = np.linalg.norm(np.subtract((self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y),(self.odompose.pose.position.x,self.odompose.pose.position.y)))
-        if pozyx_distance_traveled > (0.2 + odom_distance_traveled) and not self.skip_jump_avoidance:
+        if abs(pozyx_distance_traveled - odom_distance_traveled) > 0.1 and not self.skip_jump_avoidance:
             self.recover("jumped ignored")
             return
         ################################################
