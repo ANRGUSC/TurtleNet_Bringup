@@ -3,8 +3,8 @@
       <arg name="multi_robot_name" default="tb3_1"/>
       <arg name="set_lidar_frame_id" default="tb3_1/base_scan"/>
       <!-- to do -->
-      <arg name="x_pos" default="0"/>
-      <arg name="y_pos" default="-1.74"/>
+      <arg name="x_pos" default="3.47"/>
+      <arg name="y_pos" default="-1.28"/>
       <arg name="yaw" default="0"/>
 
       <arg name="anchor0" default="tb3_0"/>

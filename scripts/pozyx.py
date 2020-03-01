@@ -229,32 +229,36 @@ class Pozyx():
         self.known_inits = True
 
         try:
-            rospy.get_param('anchor0')
+            self.a0 = rospy.get_param('anchor0')
         except KeyError:
             rospy.loginfo("who is my anchor0?")
             return
         try:
-            rospy.get_param('anchor1')
+            self.a1 = rospy.get_param('anchor1')
         except KeyError:
             rospy.loginfo("who is my anchor1?")
             return
         try:
-            rospy.get_param('anchor2')
+            self.a2 = rospy.get_param('anchor2')
         except KeyError:
             rospy.loginfo("who is my anchor2?")
             return
 
+        self.me = rospy.get_namespace()
+
+
+
         if self.sim:
             self.truestate_sub = rospy.Subscriber('/gazebo/model_states', ModelStates, self.truestate_callback)
-        self.anchor0_sub = rospy.Subscriber('/'+rospy.get_param('anchor0')+'/pozyx_position', PoseStamped, self.anchor0_callback)
-        self.anchor1_sub = rospy.Subscriber('/'+rospy.get_param('anchor1')+'/pozyx_position', PoseStamped, self.anchor1_callback)
-        self.anchor2_sub = rospy.Subscriber('/'+rospy.get_param('anchor2')+'/pozyx_position', PoseStamped, self.anchor2_callback)
+        self.anchor0_sub = rospy.Subscriber('/'+self.a0+'/pozyx_position', PoseStamped, self.anchor0_callback)
+        self.anchor1_sub = rospy.Subscriber('/'+self.a1+'/pozyx_position', PoseStamped, self.anchor1_callback)
+        self.anchor2_sub = rospy.Subscriber('/'+self.a2+'/pozyx_position', PoseStamped, self.anchor2_callback)
         self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_callback)
 
         # subscribe to the OBSTACLE_DETECTOR for the sake of determining if there is an obstacle obstructing pozyx
         self.laser_sub = rospy.Subscriber('obstacle_detect', LaserScan, self.laser_callback)
 
-        self.pub = rospy.Publisher(rospy.get_namespace()+'pozyx_position', PoseStamped, queue_size=10)
+        self.pub = rospy.Publisher(self.me+'pozyx_position', PoseStamped, queue_size=10)
 
         # for simulation
         self.gazebo_states, self.scan_reading, self.truepose = None, None, None
@@ -274,7 +278,7 @@ class Pozyx():
 
         self.initialpose = PoseStamped()
         self.initialpose.header.stamp = rospy.Time.now()
-        self.initialpose.header.frame_id = rospy.get_namespace()+"base_scan"
+        self.initialpose.header.frame_id = self.me+"base_scan"
         self.initialpose.pose.position.x, self.initialpose.pose.position.y, self.initialpose.pose.position.z = float(sys.argv[2]), float(sys.argv[3]), 0
         q = quaternion_from_euler(0, 0, float(sys.argv[4]))
         self.initialpose.pose.orientation.x, self.initialpose.pose.orientation.y, self.initialpose.pose.orientation.z, self.initialpose.pose.orientation.w = q[0], q[1], q[2], q[3]
@@ -282,7 +286,7 @@ class Pozyx():
 
         self.odompose = PoseStamped()
 
-        self.skip_jump_avoidance = (rospy.get_namespace() == "/tb3_3/")
+        self.skip_jump_avoidance = (self.me == "/tb3_3/")
 
         while not rospy.is_shutdown():
             if not (self.anchor0 and self.anchor1 and self.anchor2):
@@ -314,14 +318,14 @@ class Pozyx():
             rospy.loginfo("Uh oh, can't calibrate without all three anchors!")
             return
         t0 = pose_dist(self.initialpose.pose, self.anchor0)
-        r0 = dists[rospy.get_param('anchor0')]
+        r0 = dists[self.a0]
         t1 = pose_dist(self.initialpose.pose, self.anchor1)
-        r1 = dists[rospy.get_param('anchor1')]
+        r1 = dists[self.a1]
         t2 = pose_dist(self.initialpose.pose, self.anchor2)
-        r2 = dists[rospy.get_param('anchor2')]
-        self.offset = {self.anchor_device[rospy.get_param('anchor0')]:(t0-r0),
-                        self.anchor_device[rospy.get_param('anchor1')]:(t1-r1),
-                        self.anchor_device[rospy.get_param('anchor2')]:(t2-r2)}
+        r2 = dists[self.a2]
+        self.offset = {self.anchor_device[self.a0]:(t0-r0),
+                        self.anchor_device[self.a1]:(t1-r1),
+                        self.anchor_device[self.a2]:(t2-r2)}
         print(self.offset)
         self.calibrated = True
         return True
@@ -338,15 +342,15 @@ class Pozyx():
         while dists is None:
             dists = self.get_pozyx_ranges()
         rospy.loginfo(dists)
-        if rospy.get_namespace() == "/tb3_0/":
+        if self.me == "/tb3_0/":
             self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, 0
             rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
             self.pub.publish(self.initialpose)
-        elif rospy.get_namespace() == "/tb3_1/":
+        elif self.me == "/tb3_1/":
             self.initialpose.pose.position.x, self.initialpose.pose.position.y = 0, -dists['tb3_0']
             rospy.loginfo("pozyx: calculated initial pose (%f, %f)", self.initialpose.pose.position.x, self.initialpose.pose.position.y)
             self.pub.publish(self.initialpose)
-        elif rospy.get_namespace() == "/tb3_2/":
+        elif self.me == "/tb3_2/":
             if self.anchor1:
                 tb3_1y = self.anchor1.position.y
                 my_location = diangulate({"tb3_0":dists['tb3_0'], "tb3_1":dists['tb3_1']},{"tb3_0":(0,0), "tb3_1":(0,tb3_1y)})
@@ -490,15 +494,15 @@ class Pozyx():
             r2 += noise(pose_dist(self.truepose.pose,self.anchor2_truepose))
         if self.scan_reading:
             if not self.is_obstructed(self.scan_reading, self.truepose.pose, self.anchor0_truepose):
-                dists[rospy.get_param('anchor0')]=r0/10
+                dists[self.a0]=r0/10
             if not self.is_obstructed(self.scan_reading, self.truepose.pose, self.anchor1_truepose):
-                dists[rospy.get_param('anchor1')]=r1/10
+                dists[self.a1]=r1/10
             if not self.is_obstructed(self.scan_reading, self.truepose.pose, self.anchor2_truepose):
-                dists[rospy.get_param('anchor2')]=r2/10
+                dists[self.a2]=r2/10
         else:
-            dists[rospy.get_param('anchor0')]=r0/10
-            dists[rospy.get_param('anchor1')]=r1/10
-            dists[rospy.get_param('anchor2')]=r2/10
+            dists[self.a0]=r0/10
+            dists[self.a1]=r1/10
+            dists[self.a2]=r2/10
         return dists
 
     def recover(self, message=""):
@@ -509,11 +513,14 @@ class Pozyx():
         new = self.previous_pose.pose.position.x + (self.odompose.pose.position.x-self.previous_odompose.pose.position.x), self.previous_pose.pose.position.y + (self.odompose.pose.position.y-self.previous_odompose.pose.position.y)
         recoverypose = PoseStamped()
         recoverypose.header.stamp = rospy.Time.now()
-        recoverypose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
+        recoverypose.header.frame_id = self.me+"base_scan" # to do
         recoverypose.pose.position.x, recoverypose.pose.position.y = new
         recoverypose.pose.orientation = self.odompose.pose.orientation ## YAW
         rospy.loginfo(message+": %.3f %.3f", recoverypose.pose.position.x, recoverypose.pose.position.y)
         self.pub.publish(recoverypose)
+        # comment this out if you trust your odom more than your pozyx
+        self.previous_pose = deepcopy(recoverypose)
+        self.previous_odompose = deepcopy(self.odompose)
         return
 
     def set_pozyx_position(self):
@@ -522,10 +529,10 @@ class Pozyx():
         #     if self.load_states(self.gazebo_states):
         #         self.pub.publish(self.truepose)
         #     else:
-        #         rospy.loginfo(rospy.get_namespace()+": don't have gazebo ranges yet")
+        #         rospy.loginfo(self.me+": don't have gazebo ranges yet")
         #     return
         # elif self.sim:
-        #     rospy.loginfo(rospy.get_namespace()+": don't have gazebo states yet")
+        #     rospy.loginfo(self.me+": don't have gazebo states yet")
         #     return
         # else:
         #     return
@@ -534,10 +541,10 @@ class Pozyx():
             if self.load_states(self.gazebo_states):
                 dists = self.get_gazebo_pozyx_ranges()
             else:
-                rospy.loginfo(rospy.get_namespace()+": don't have gazebo ranges yet")
+                rospy.loginfo(self.me+": don't have gazebo ranges yet")
                 return
         elif self.sim:
-            rospy.loginfo(rospy.get_namespace()+": don't have gazebo states yet")
+            rospy.loginfo(self.me+": don't have gazebo states yet")
             return
         else:
             rospy.logdebug("ranging...")
@@ -551,12 +558,12 @@ class Pozyx():
             return
         else:
             coords = {}
-            if rospy.get_param('anchor0') in dists.keys():
-                coords[rospy.get_param('anchor0')] = (self.anchor0.position.x,self.anchor0.position.y)
-            if rospy.get_param('anchor1') in dists.keys():
-                coords[rospy.get_param('anchor1')] = (self.anchor1.position.x,self.anchor1.position.y)
-            if rospy.get_param('anchor2') in dists.keys():
-                coords[rospy.get_param('anchor2')] = (self.anchor2.position.x,self.anchor2.position.y)
+            if self.a0 in dists.keys():
+                coords[self.a0] = (self.anchor0.position.x,self.anchor0.position.y)
+            if self.a1 in dists.keys():
+                coords[self.a1] = (self.anchor1.position.x,self.anchor1.position.y)
+            if self.a2 in dists.keys():
+                coords[self.a2] = (self.anchor2.position.x,self.anchor2.position.y)
             if len(dists) == 2:
                 coords["me"] = (self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)
                 dists["me"] = pose_dist(self.previous_odompose.pose,self.odompose.pose)
@@ -569,13 +576,14 @@ class Pozyx():
 
         pozyx_distance_traveled = np.linalg.norm(np.subtract(my_location,(self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)))
         odom_distance_traveled = np.linalg.norm(np.subtract((self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y),(self.odompose.pose.position.x,self.odompose.pose.position.y)))
-        if abs(pozyx_distance_traveled - odom_distance_traveled) > 0.1 and not self.skip_jump_avoidance:
+        # increase this if you trust your pozyx more than your odom
+        if abs(pozyx_distance_traveled - odom_distance_traveled) > 0.15 and not self.skip_jump_avoidance:
             self.recover("jumped ignored")
             return
         ################################################
         pozyxpose = PoseStamped()
         pozyxpose.header.stamp = rospy.Time.now()
-        pozyxpose.header.frame_id = rospy.get_namespace()+"base_scan" # to do
+        pozyxpose.header.frame_id = self.me+"base_scan" # to do
         pozyxpose.pose.position.x, pozyxpose.pose.position.y = my_location
         # vec = np.subtract([pozyxpose.pose.position.x, pozyxpose.pose.position.y],[self.previous_pose.pose.position.x,self.previous_pose.pose.position.y])
         # if np.linalg.norm(vec) > 0.15 and False:
@@ -586,7 +594,7 @@ class Pozyx():
         #     pozyxpose.pose.orientation.x, pozyxpose.pose.orientation.y, pozyxpose.pose.orientation.z, pozyxpose.pose.orientation.w = q[0], q[1], q[2], q[3]
         # else:
         pozyxpose.pose.orientation = self.odompose.pose.orientation
-        rospy.loginfo(rospy.get_namespace()+"pozyx estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
+        rospy.loginfo(self.me+"pozyx estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
         self.pub.publish(pozyxpose)
         self.previous_pose = deepcopy(pozyxpose)
         self.previous_odompose = deepcopy(self.odompose)
@@ -602,21 +610,21 @@ class Pozyx():
     def load_states(self, states):
         found = 0
         for index, name in enumerate(states.name):
-            if name == rospy.get_namespace()[1:-1]:
+            if name == self.me[1:-1]:
                 self.truepose = PoseStamped()
                 self.truepose.header.stamp = rospy.Time.now()
-                self.truepose.header.frame_id = rospy.get_namespace()+"base_scan"
+                self.truepose.header.frame_id = self.me+"base_scan"
                 self.truepose.pose = states.pose[index]
                 found +=1
-            elif name == rospy.get_param('anchor0'):
+            elif name == self.a0:
                 self.anchor0_truepose = Pose()
                 self.anchor0_truepose = states.pose[index]
                 found += 1
-            elif name == rospy.get_param('anchor1'):
+            elif name == self.a1:
                 self.anchor1_truepose = Pose()
                 self.anchor1_truepose = states.pose[index]
                 found +=1
-            elif name == rospy.get_param('anchor2'):
+            elif name == self.a2:
                 self.anchor2_truepose = Pose()
                 self.anchor2_truepose = states.pose[index]
                 found +=1
