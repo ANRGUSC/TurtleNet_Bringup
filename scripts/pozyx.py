@@ -53,6 +53,7 @@ def get_angle(d1, d2, sep):
         return math.asin(ratio)
 
 def triangulate(node_data, a_nodelist):
+    starttime = time.time()
     anchor_coor = list(a_nodelist.values())
     anchor_id = list(a_nodelist.keys())
     num_nodes = len(a_nodelist)
@@ -131,6 +132,7 @@ def triangulate(node_data, a_nodelist):
     if len(estimates) == 0:
         return None
     retval = np.mean(estimates, axis=0).tolist()
+    print("time to triangulate:", time.time()-starttime)
     return (round(retval[0], 4), round(retval[1], 4))
 
 def diangulate(node_data, a_nodelist):
