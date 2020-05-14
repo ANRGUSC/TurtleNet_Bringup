@@ -26,6 +26,9 @@ Then replace the turtlebot3_bringup package in your catkin workspace with this r
 
 The `in_sim` branch should be used when testing code in Gazebo. The `on_robot` branch should be used when testing code on the robots.
 
+Original source code:  
+https://github.com/ROBOTIS-GIT/turtlebot3  
+
 #### Launch
 General:
 `turtlebot3_pozyx.launch` launches the pozyx ROS node.
