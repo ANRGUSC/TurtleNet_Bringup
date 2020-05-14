@@ -4,13 +4,13 @@ TurtleNet is a project out of the Autonomous Networks Research Group at the Univ
 
 Our testbed is comprised of several Turtlebot3 Burgers integrated with Pozyx Anchors.
 
-Turtlebot3 Burgers
-specs: http://emanual.robotis.com/docs/en/platform/turtlebot3/specifications/#specifications
-source code: https://github.com/ROBOTIS-GIT/turtlebot3
+Turtlebot3 Burgers  
+specs: http://emanual.robotis.com/docs/en/platform/turtlebot3/specifications/#specifications  
+source code: https://github.com/ROBOTIS-GIT/turtlebot3  
 
-Pozyx Anchor
-specs: https://www.pozyx.io/shop/product/creator-anchor-69
-python library: https://pypozyx.readthedocs.io/en/develop/
+Pozyx Anchor  
+specs: https://www.pozyx.io/shop/product/creator-anchor-69  
+python library: https://pypozyx.readthedocs.io/en/develop/  
 
 ### This repository
 
@@ -24,11 +24,14 @@ The `in_sim` branch should be used when testing code in Gazebo. The `on_robot` b
 
 #### Launch
 General:
-turtlebot3_pozyx.launch launches the pozyx ROS node.
+`turtlebot3_pozyx.launch` launches the pozyx ROS node.
 
 For 4 robots:
-tb3_x.launch is comparable to turtlebot3_robot.launch under the tb3_x namespace (the namespace of robot x) and establishes the other three robots as instantaneous anchors for trilateration.
+`tb3_x.launch` is comparable to `turtlebot3_robot.launch` under the `tb3_x` namespace (the namespace of robot x) and establishes the other three robots as instantaneous anchors for trilateration.
 
 #### Scripts
-pozyx.py contains the pozyx ROS node
-log_position.py is used for evaluation localization, but should only be used with Gazebo
+`pozyx.py` contains the pozyx ROS node
+`log_position.py` is used for evaluation localization, but should only be used with Gazebo
+
+To simulate TurtleNet in Gazebo, download our TurtleNet_Simulations package here:  
+https://github.com/ANRGUSC/TurtleNet_Simulations
