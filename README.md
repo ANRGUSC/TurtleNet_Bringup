@@ -3,7 +3,7 @@
 TurtleNet is a project out of the Autonomous Networks Research Group at the University of Southern California investigating multi-robot exploration and mapping via ultrawide-band trilateration.
 
 See also:   
-https://github.com/ANRGUSC/TurtleNet  
+https://github.com/ANRGUSC/TurtleNet_Simulations  
 https://github.com/ANRGUSC/gmapping_and_TEAM  
 
 Our testbed is comprised of several Turtlebot3 Burgers integrated with Pozyx Anchors.
