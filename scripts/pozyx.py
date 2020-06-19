@@ -12,6 +12,7 @@ if (sys.argv[1] == "True" or sys.argv[1] == "true"):
 from geometry_msgs.msg import *
 from nav_msgs.msg import *
 from sensor_msgs.msg import *
+from std_msgs.msg import *
 from tf.transformations import quaternion_from_euler, euler_from_quaternion
 import random
 import math
@@ -257,6 +258,9 @@ class Pozyx():
 
         self.pub = rospy.Publisher(rospy.get_namespace()+'pozyx_position', PoseStamped, queue_size=10)
 
+        self.rf = Bool()
+        self.recovery_flag = rospy.Publisher('recovery_flag', Bool, queue_size=5)
+
         # for simulation
         self.gazebo_states, self.scan_reading, self.truepose = None, None, None
 
@@ -425,10 +429,6 @@ class Pozyx():
                 dists[rospy.get_param('anchor1')]=r1/10
             if not self.is_obstructed(self.scan_reading, self.truepose.pose, self.anchor2_truepose):
                 dists[rospy.get_param('anchor2')]=r2/10
-        else:
-            dists[rospy.get_param('anchor0')]=r0/10
-            dists[rospy.get_param('anchor1')]=r1/10
-            dists[rospy.get_param('anchor2')]=r2/10
         return dists
 
     def recover(self, message=""):
@@ -477,6 +477,9 @@ class Pozyx():
             rospy.loginfo(dists)
         ####################################
         if len(dists) < 2:
+            self.rf.data = True
+            rospy.loginfo("Recovery")
+            self.recovery_flag.publish(self.rf)
             self.recover("less than 2 anchors")
             return
         else:
@@ -490,17 +493,26 @@ class Pozyx():
             if len(dists) == 2:
                 coords["me"] = (self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)
                 dists["me"] = pose_dist(self.previous_odompose.pose,self.odompose.pose)
+                self.rf.data = False
+                rospy.logdebug("Not Recovery")
+                self.recovery_flag.publish(self.rf)
                 self.recover("only 2 anchors")
                 return
         my_location = triangulate(dists,coords)
         if my_location is None:
+            self.rf.data = False
+            rospy.logdebug("Not Recovery")
+            self.recovery_flag.publish(self.rf)
             self.recover("triangulate failed")
             return
 
         pozyx_distance_traveled = np.linalg.norm(np.subtract(my_location,(self.previous_pose.pose.position.x,self.previous_pose.pose.position.y)))
         odom_distance_traveled = np.linalg.norm(np.subtract((self.previous_odompose.pose.position.x,self.previous_odompose.pose.position.y),(self.odompose.pose.position.x,self.odompose.pose.position.y)))
         if pozyx_distance_traveled > (0.2 + odom_distance_traveled) and not self.skip_jump_avoidance:
-            self.recover("jumped ignored")
+            self.rf.data = False
+            rospy.logdebug("Not Recovery")
+            self.recovery_flag.publish(self.rf)
+            self.recover("jump ignored")
             return
         ################################################
         pozyxpose = PoseStamped()
@@ -516,6 +528,11 @@ class Pozyx():
         #     pozyxpose.pose.orientation.x, pozyxpose.pose.orientation.y, pozyxpose.pose.orientation.z, pozyxpose.pose.orientation.w = q[0], q[1], q[2], q[3]
         # else:
         pozyxpose.pose.orientation = self.odompose.pose.orientation
+
+        self.rf.data = False
+        rospy.logdebug("Not Recovery")
+        self.recovery_flag.publish(self.rf)
+
         rospy.loginfo(rospy.get_namespace()+"pozyx estimated position: %.3f %.3f", pozyxpose.pose.position.x, pozyxpose.pose.position.y)
         self.pub.publish(pozyxpose)
         self.previous_pose = deepcopy(pozyxpose)
